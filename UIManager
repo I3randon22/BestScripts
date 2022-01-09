@@ -1,0 +1,170 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.UI;
+using TMPro;
+using UnityEngine;
+using static GameManager;
+
+public class UIManager : MonoBehaviour
+{
+    public static UIManager Instance;
+    [SerializeField] Text[] coinText;
+    [SerializeField] GameObject uiParent;
+    [SerializeField] GameObject playerUIPrefab;
+    [SerializeField] GameObject[] playerUI;
+    [SerializeField] GameObject playerInvPrefab;
+    [SerializeField] GameObject[] playerInv;
+    [SerializeField] GameObject coinOutputPrefab;
+    [SerializeField] GameObject Display;
+    [SerializeField] GameObject EndTurn;
+    public Material[] mats;
+    const int size = 4;
+    [SerializeField] GameManager gameManager;
+    [SerializeField] Color[] colorsUI;
+
+    bool inventoryOpen = false;
+   
+
+    private void Awake()
+    {
+        gameManager = this.GetComponent<GameManager>();
+        Instance = this;
+    }
+
+    public void OpenInventory()
+    {
+        //if current player is not AI
+        if (!gameManager.players[gameManager.playerID].isAI)
+        {
+            if (!inventoryOpen)
+            {
+                Debug.Log("Paused");
+                gameManager.gamePaused = true;
+                playerInv[gameManager.playerID].SetActive(true);
+
+                //Hide Dice
+                Display.SetActive(false);
+                
+                inventoryOpen = true;
+            }
+            else if (inventoryOpen)
+            {
+                Debug.Log("Unpaused");
+                gameManager.gamePaused = false;
+                playerInv[gameManager.playerID].SetActive(false);
+                Display.SetActive(true);
+                inventoryOpen = false;
+            }
+        }
+    }
+
+    public void UpdateUI()
+    {
+        for(int i = 0; i < gameManager.numberOfPlayers; i++)
+        {
+            coinText[i].text = "Coins: " + gameManager.players[i].GetComponent<Inventory>().coins.ToString();
+            playerUI[i].GetComponentInChildren<ItemPanel>().Initialise();
+            playerInv[i].GetComponentInChildren<ItemPanel>().Initialise();
+        }
+       
+    }
+
+
+
+    public void SetUI()
+    {
+        coinText = new Text[gameManager.numberOfPlayers];
+        playerUI = new GameObject[gameManager.numberOfPlayers];
+        playerInv = new GameObject[gameManager.numberOfPlayers];
+
+
+        if (playerUIPrefab != null)
+        {
+            for (int i = 0; i < gameManager.numberOfPlayers; i++)
+            {
+                //instantiating the playerUI and playerInv in the scene as Displays as their parent
+                playerUI[i] = GameObject.Instantiate(playerUIPrefab, GameObject.Find("PlayerUIDisplays").transform);
+                playerInv[i] = GameObject.Instantiate(playerInvPrefab, GameObject.Find("Inventorys").transform);
+                //grabbing script InventoryButton and seeting ID to i, this will link it up to the corresponding player
+                playerInv[i].GetComponentInChildren<InventoryButton>().ID = i;
+                playerUI[i].GetComponentInChildren<InventoryButton>().ID = i;
+                //grabing the bubble transform to change the colour to match the player.
+                Transform bubble = playerUI[i].transform.GetChild(1);
+                Transform bubbleInv = playerInv[i].transform.GetChild(1);
+                bubble.GetComponent<Image>().color = colorsUI[i];
+                bubbleInv.GetComponent<Image>().color = colorsUI[i];
+                bubble.GetComponentInChildren<Text>().text = "Player " + (i+1).ToString();
+                bubbleInv.GetComponentInChildren<Text>().text = "Player " + (i + 1).ToString() + " Inventory";
+
+                Transform playerShirt = gameManager.playerList[i].transform.GetChild(0).GetChild(3);
+                SkinnedMeshRenderer playerShirtMesh = playerShirt.GetComponent<SkinnedMeshRenderer>();
+
+                mats = playerShirtMesh.materials;
+
+                mats[2].SetColor("ToonColor", colorsUI[i]);
+                mats[3].SetColor("ToonColor", colorsUI[i]);
+
+                coinText[i] = playerUI[i].transform.GetChild(0).GetChild(0).GetComponentInChildren<Text>();
+
+                ItemPanel panel = playerUI[i].GetComponentInChildren<ItemPanel>();
+       
+                panel.inventory = gameManager.players[i].inventory;
+
+                panel.inventory.name = "Player " + (i + 1) + " Inventory";
+
+                panel.inventory.slots = new List<ItemSlot>();
+                ItemSlot empty = new ItemSlot();
+
+                for (int j = 0; j < 4; j++)
+                {
+                    panel.inventory.slots.Add(empty);
+                }
+
+                panel.Initialise();
+
+                //Setting inventory to corrosponding player
+                playerInv[i].GetComponentInChildren<ItemPanel>().inventory = panel.inventory;
+            }
+        }
+
+        UpdateUI();
+
+    }
+
+    public void SpawnCoinOutput(int amount)
+    {
+        if (coinOutputPrefab != null)
+        {
+            //set player transform to current player
+            Transform playerTransform = gameManager.playerList[gameManager.playerID].transform;
+            //instantiate output game object
+            GameObject output = Instantiate(coinOutputPrefab, uiParent.transform);
+
+            TextMeshProUGUI text = output.GetComponent<TextMeshProUGUI>();
+            //make game object look at current camera
+            //output.transform.LookAt(gameManager.GetComponent<CameraManager>().vcams[gameManager.playerID].transform);
+
+            if (amount > 0)
+            {
+                text.color = Color.green;
+                text.SetText("+ " + amount.ToString());
+            }
+            else
+            {
+                text.color = Color.red;
+                text.SetText(amount.ToString());
+            }
+        }
+    }
+
+    public void EndTurnButton()
+    {
+        if(gameManager.players[gameManager.playerID].canSwitchTurn && !gameManager.rollagain)
+        {
+            gameManager.UpdateGameState(GameState.NewTurn);
+            gameManager.players[gameManager.playerID].turnEnded = true;
+            gameManager.players[gameManager.playerID].canSwitchTurn = false;
+        }
+    }
+}
