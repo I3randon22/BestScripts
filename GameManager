@@ -1,0 +1,163 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class GameManager : MonoBehaviour
+{
+    public static GameManager Instance;
+    CameraManager cameraManager;
+    UIManager uiManager;
+
+    public GameState State;
+    public static event Action<GameState> OnGameStateChanged;
+
+    [SerializeField] internal int numberOfPlayers = 2;
+    [SerializeField] GameObject playerPrefab;
+    internal PlayerController[] players;
+    [SerializeField] internal List<PlayerController> playerList = new List<PlayerController>();
+    [SerializeField] internal int playerID = 0;
+    [SerializeField] internal float diceRoll;
+
+    [SerializeField] GameObject itemBoxPrefab;
+    DiceRoll dice;
+    internal bool rollagain = false;
+
+
+    [SerializeField] bool singlePlayer;
+    [SerializeField] internal bool gamePaused = false;
+    
+    public enum GameState
+    {
+        PlayerSet,
+        NewTurn,
+        DiceRoll,
+        GiveItem,
+        MiniGame,
+        Victory,
+        Lose
+    }
+
+    // Start is called before the first frame update
+    void Awake()
+    {
+        Instance = this;
+    }
+
+    private void Start()
+    {
+        dice = GameObject.Find("Dice").GetComponent<DiceRoll>();
+        cameraManager = this.GetComponent<CameraManager>();
+        uiManager = this.GetComponent<UIManager>();
+        UpdateGameState(GameState.PlayerSet);
+    }
+
+    public void UpdateGameState(GameState newState)
+    {
+        State = newState;
+
+        switch (newState)
+        {
+            case GameState.PlayerSet:
+                AddPlayers();
+                break;
+            case GameState.NewTurn:
+                NewTurn();
+                break;
+            case GameState.DiceRoll:
+                DiceRoll();
+                break;
+            case GameState.GiveItem:
+                ReceiveItem();
+                break;
+            case GameState.MiniGame:
+                break;
+            case GameState.Victory:
+                break;
+            case GameState.Lose:
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(newState), newState, null);
+        }
+        //if triggered and not null invoke it
+        OnGameStateChanged?.Invoke(newState);
+
+    }
+
+    void AddPlayers()
+    {
+        //set the amount of players
+        players = new PlayerController[numberOfPlayers];
+
+        //clear list and add all players to list
+        playerList.Clear();
+
+        //Instantiate all players
+        for(int i = 0; i < numberOfPlayers - 1; i++)
+        {
+            Instantiate(playerPrefab, new Vector3(0, 0, 0), Quaternion.identity, GameObject.Find("Players").transform);
+        }
+
+        //Puts all players in a playerlist
+        players = GameObject.Find("Players").GetComponentsInChildren<PlayerController>();
+
+        foreach (PlayerController child in players)
+        {
+            playerList.Add(child);
+        }
+
+        Debug.Log("Players Added");
+
+        if(singlePlayer)
+        {
+            for (int i = 1; i < numberOfPlayers; i++)
+            {
+                players[i].isAI = true;
+            }
+        }
+
+        //Set UI up for all players
+        uiManager.SetUI();
+
+        //Set camera up for all players
+        cameraManager.SetCamera();
+    }
+
+    private void DiceRoll()
+    {
+        dice.RollDice();
+    }
+
+    private void NewTurn()
+    {
+        uiManager.UpdateUI();
+
+        //allow only number of players set in playerID
+        playerID = (playerID + 1) % numberOfPlayers;
+
+        cameraManager.ChangeCamera();
+
+        if (players[playerID].isAI)
+        {
+            UpdateGameState(GameState.DiceRoll);
+        }
+    }
+
+    private void ReceiveItem()
+    {
+        //spawn itembox at set position and rotation (above current players head)
+        GameObject itemBox = Instantiate(itemBoxPrefab, players[playerID].transform.position, Quaternion.Euler(0, 180, 0));
+        itemBox.transform.position = new Vector3(players[playerID].transform.position.x, players[playerID].transform.position.y + 6f, players[playerID].transform.position.z);
+
+        //loop through current players inventory and find a free slot, if free store item in it
+        for(int i = 0; i < players[playerID].inventory.slots.Count; i++)
+        {
+            if(players[playerID].inventory.slots[i].item == null)
+            {
+                players[playerID].inventory.slots[i] = itemBox.GetComponentInChildren<ItemSpin>().itemSlot;
+                return;
+            }
+        }
+    }
+
+}
